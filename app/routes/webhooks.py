@@ -1,63 +1,54 @@
-from fastapi import APIRouter, Request, Header, HTTPException
-from supabase import create_client
+from fastapi import APIRouter, Request, HTTPException
+from app.config.plans import PLANS
+from app.services.supabase import supabase
 import os
-import json
 
 router = APIRouter()
 
-supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-)
-
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 
-
-@router.post("/webhooks/payment")
-async def payment_webhook(
-    request: Request,
-    x_webhook_secret: str = Header(None)
-):
-    """
-    Webhook para Cakto / Kiwify
-    """
-
-    # 1️⃣ Segurança básica
-    if x_webhook_secret != WEBHOOK_SECRET:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
+@router.post("/webhook/cakto")
+async def cakto_webhook(request: Request):
     payload = await request.json()
 
-    event = payload.get("event")
-    user_id = payload.get("customer", {}).get("external_id")
-    plan = payload.get("plan", "basic")
+    # 🔐 validação simples
+    if payload.get("secret") != WEBHOOK_SECRET:
+        raise HTTPException(status_code=401, detail="Webhook inválido")
 
-    # 2️⃣ Log bruto do webhook
+    event = payload.get("event")
+    data = payload.get("data", {})
+
+    # salva log bruto
     supabase.table("payment_logs").insert({
-        "provider": "cakto_ou_kiwify",
+        "provider": "cakto",
         "event": event,
         "payload": payload
     }).execute()
 
-    # 3️⃣ Definição de planos
-    PLAN_LIMITS = {
-        "basic": 30,
-        "pro": 200,
-        "premium": 9999
-    }
+    # eventos importantes
+    if event == "payment.approved":
+        user_id = data["customer"]["external_id"]  # seu user_id
+        product_name = data["product"]["name"]
 
-    # 4️⃣ Eventos tratados
-    if event == "payment_approved":
+        if product_name not in PLANS:
+            raise HTTPException(status_code=400, detail="Plano desconhecido")
+
+        plan_info = PLANS[product_name]
+
         supabase.table("subscriptions").upsert({
             "user_id": user_id,
-            "plan": plan,
+            "plan": plan_info["plan"],
             "status": "active",
-            "monthly_limit": PLAN_LIMITS.get(plan, 30)
+            "monthly_limit": plan_info["monthly_limit"],
+            "current_usage": 0
         }).execute()
 
-    elif event in ["payment_canceled", "payment_overdue"]:
-        supabase.table("subscriptions").update({
-            "status": "inactive"
-        }).eq("user_id", user_id).execute()
+    elif event in ["subscription.canceled", "payment.failed"]:
+        user_id = data["customer"]["external_id"]
 
-    return {"ok": True}
+        supabase.table("subscriptions") \
+            .update({"status": "inactive"}) \
+            .eq("user_id", user_id) \
+            .execute()
+
+    return {"status": "ok"}
