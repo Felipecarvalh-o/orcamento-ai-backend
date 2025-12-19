@@ -5,7 +5,12 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
+
+# ROTAS
+from app.routes.login import router as login_router
+from app.routes.orcamento import router as orcamento_router
 
 # ==========================
 # CONFIGURAÇÕES
@@ -24,6 +29,25 @@ supabase: Client = create_client(
 )
 
 app = FastAPI(title="Orçamento AI Backend")
+
+# ==========================
+# CORS (OBRIGATÓRIO PARA FRONTEND)
+# ==========================
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # depois você restringe
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ==========================
+# REGISTRO DAS ROTAS
+# ==========================
+
+app.include_router(login_router)
+app.include_router(orcamento_router)
 
 # ==========================
 # HEALTH CHECK
@@ -73,7 +97,6 @@ def verificar_plano_e_limite(user_id: str):
     if sub["status"] != "active":
         raise HTTPException(status_code=403, detail="Assinatura inativa")
 
-    # Reset automático
     if sub["renews_at"]:
         renews_at = datetime.fromisoformat(sub["renews_at"])
         if datetime.utcnow() > renews_at:
@@ -93,9 +116,6 @@ def verificar_plano_e_limite(user_id: str):
 
 
 def incrementar_uso(user_id: str):
-    """
-    Incrementa +1 no uso mensal
-    """
     res = supabase.table("subscriptions") \
         .select("current_usage") \
         .eq("user_id", user_id) \
@@ -108,26 +128,6 @@ def incrementar_uso(user_id: str):
         "current_usage": atual + 1,
         "updated_at": datetime.utcnow().isoformat()
     }).eq("user_id", user_id).execute()
-
-# ==========================
-# ENDPOINT TESTE ORÇAMENTO
-# ==========================
-
-@app.post("/generate-budget")
-def generate_budget(user_id: str):
-    verificar_plano_e_limite(user_id)
-
-    budget = {
-        "descricao": "Serviço de construção",
-        "valor_total": 1500
-    }
-
-    incrementar_uso(user_id)
-
-    return {
-        "success": True,
-        "budget": budget
-    }
 
 # ==========================
 # WEBHOOK CAKTO
