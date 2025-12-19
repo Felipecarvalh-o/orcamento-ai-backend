@@ -1,31 +1,35 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orçamento AI</title>
+
+  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
 
-<div class="bg-white p-6 rounded w-full max-w-sm">
-  <h1 class="text-xl font-bold mb-4 text-center">Entrar</h1>
+  <div class="bg-white w-full max-w-md p-6 rounded-xl shadow">
+    <h1 class="text-2xl font-bold mb-4 text-center">Gerar Orçamento</h1>
 
-  <input id="userId" placeholder="Seu ID" class="w-full p-3 border rounded mb-4"/>
+    <input id="userId" class="w-full border p-3 mb-3 rounded" placeholder="ID do usuário" />
+    
+    <select id="tipo" class="w-full border p-3 mb-3 rounded">
+      <option value="pedreiro">Pedreiro</option>
+      <option value="eletricista">Eletricista</option>
+      <option value="encanador">Encanador</option>
+    </select>
 
-  <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded">
-    Entrar
-  </button>
-</div>
+    <input id="margem" type="number" class="w-full border p-3 mb-4 rounded" placeholder="Margem (%)" />
 
-<script>
-function login() {
-  const id = document.getElementById("userId").value;
-  if (!id) return alert("Informe seu ID");
-  localStorage.setItem("user_id", id);
-  window.location.href = "dashboard.html";
-}
-</script>
+    <button onclick="gerar()" class="w-full bg-blue-600 text-white p-3 rounded text-lg">
+      Gerar Orçamento
+    </button>
 
+    <pre id="resultado" class="mt-4 text-sm bg-gray-100 p-3 rounded hidden"></pre>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
-
