@@ -31,12 +31,12 @@ supabase: Client = create_client(
 app = FastAPI(title="Orçamento AI Backend")
 
 # ==========================
-# CORS (OBRIGATÓRIO PARA FRONTEND)
+# CORS (FRONTEND)
 # ==========================
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # depois você restringe
+    allow_origins=["*"],  # depois restringe
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,7 +68,7 @@ PLAN_LIMITS = {
 }
 
 # ==========================
-# UTILIDADES
+# UTILIDADES DE ASSINATURA
 # ==========================
 
 def validar_assinatura(payload: bytes, assinatura_recebida: str):
@@ -80,54 +80,6 @@ def validar_assinatura(payload: bytes, assinatura_recebida: str):
 
     if not hmac.compare_digest(assinatura_calculada, assinatura_recebida):
         raise HTTPException(status_code=401, detail="Assinatura do webhook inválida")
-
-
-def verificar_plano_e_limite(user_id: str):
-    res = supabase.table("subscriptions") \
-        .select("*") \
-        .eq("user_id", user_id) \
-        .single() \
-        .execute()
-
-    if not res.data:
-        raise HTTPException(status_code=403, detail="Usuário sem assinatura")
-
-    sub = res.data
-
-    if sub["status"] != "active":
-        raise HTTPException(status_code=403, detail="Assinatura inativa")
-
-    if sub["renews_at"]:
-        renews_at = datetime.fromisoformat(sub["renews_at"])
-        if datetime.utcnow() > renews_at:
-            supabase.table("subscriptions").update({
-                "current_usage": 0,
-                "renews_at": (datetime.utcnow() + timedelta(days=30)).isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
-            }).eq("user_id", user_id).execute()
-
-            sub["current_usage"] = 0
-
-    if sub["current_usage"] >= sub["monthly_limit"]:
-        raise HTTPException(
-            status_code=429,
-            detail="Limite mensal de orçamentos atingido"
-        )
-
-
-def incrementar_uso(user_id: str):
-    res = supabase.table("subscriptions") \
-        .select("current_usage") \
-        .eq("user_id", user_id) \
-        .single() \
-        .execute()
-
-    atual = res.data["current_usage"]
-
-    supabase.table("subscriptions").update({
-        "current_usage": atual + 1,
-        "updated_at": datetime.utcnow().isoformat()
-    }).eq("user_id", user_id).execute()
 
 # ==========================
 # WEBHOOK CAKTO
@@ -153,12 +105,14 @@ async def webhook_cakto(request: Request):
     if not user_id:
         raise HTTPException(status_code=400, detail="external_id ausente")
 
+    # LOG
     supabase.table("payment_logs").insert({
         "provider": "cakto",
         "event": event,
         "payload": payload
     }).execute()
 
+    # EVENTOS
     if event == "payment.approved":
         limite = PLAN_LIMITS.get(plano, 30)
 
