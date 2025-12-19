@@ -1,1 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+
+<div class="bg-white p-6 rounded w-full max-w-sm">
+  <h1 class="text-xl font-bold mb-4 text-center">Entrar</h1>
+
+  <input id="userId" placeholder="Seu ID" class="w-full p-3 border rounded mb-4"/>
+
+  <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded">
+    Entrar
+  </button>
+</div>
+
+<script>
+function login() {
+  const id = document.getElementById("userId").value;
+  if (!id) return alert("Informe seu ID");
+  localStorage.setItem("user_id", id);
+  window.location.href = "dashboard.html";
+}
+</script>
+
+</body>
+</html>
 
