@@ -1,25 +1,36 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="p-4">
+<script>
+const form = document.getElementById("loginForm");
+const errorEl = document.getElementById("error");
 
-<script>requireAuth()</script>
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
 
-<h1 class="text-xl font-bold mb-4">Dashboard</h1>
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
 
-<div class="space-y-4">
-  <a href="novo-orcamento.html" class="block bg-green-600 text-white p-4 rounded text-center">
-    Novo Orçamento
-  </a>
+  try {
+    const res = await fetch("https://orcamento-ai-backend.onrender.com/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
 
-  <a href="historico.html" class="block bg-gray-700 text-white p-4 rounded text-center">
-    Histórico
-  </a>
-</div>
+    const data = await res.json();
 
-</body>
-</html>
+    if (!res.ok) {
+      throw new Error(data.detail || "Erro no login");
+    }
 
+    // salva sessão
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("user_id", data.user.id);
+
+    // vai para dashboard
+    window.location.href = "dashboard.html";
+
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove("hidden");
+  }
+});
+</script>
