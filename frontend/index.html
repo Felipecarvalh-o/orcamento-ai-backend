@@ -2,34 +2,81 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Orçamento AI</title>
+  <title>OrçaCerto - Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Tailwind CDN -->
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
 
-  <div class="bg-white w-full max-w-md p-6 rounded-xl shadow">
-    <h1 class="text-2xl font-bold mb-4 text-center">Gerar Orçamento</h1>
+  <div class="bg-white w-full max-w-sm p-6 rounded-xl shadow-md">
+    <h1 class="text-2xl font-bold text-center mb-6">Entrar</h1>
 
-    <input id="userId" class="w-full border p-3 mb-3 rounded" placeholder="ID do usuário" />
-    
-    <select id="tipo" class="w-full border p-3 mb-3 rounded">
-      <option value="pedreiro">Pedreiro</option>
-      <option value="eletricista">Eletricista</option>
-      <option value="encanador">Encanador</option>
-    </select>
+    <form id="loginForm" class="space-y-4">
+      <input
+        type="email"
+        id="email"
+        placeholder="Email"
+        required
+        class="w-full p-3 border rounded-lg text-lg"
+      />
 
-    <input id="margem" type="number" class="w-full border p-3 mb-4 rounded" placeholder="Margem (%)" />
+      <input
+        type="password"
+        id="password"
+        placeholder="Senha"
+        required
+        class="w-full p-3 border rounded-lg text-lg"
+      />
 
-    <button onclick="gerar()" class="w-full bg-blue-600 text-white p-3 rounded text-lg">
-      Gerar Orçamento
-    </button>
+      <button
+        type="submit"
+        class="w-full bg-blue-600 text-white p-3 rounded-lg text-lg font-semibold"
+      >
+        Entrar
+      </button>
+    </form>
 
-    <pre id="resultado" class="mt-4 text-sm bg-gray-100 p-3 rounded hidden"></pre>
+    <p id="error" class="text-red-600 text-center mt-4 hidden"></p>
   </div>
 
-  <script src="app.js"></script>
+<script>
+const form = document.getElementById("loginForm");
+const errorEl = document.getElementById("error");
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+
+  try {
+    const res = await fetch("https://SEU-BACKEND.onrender.com/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || "Erro no login");
+    }
+
+    // salva sessão simples
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("user_id", data.user.id);
+
+    // vai para dashboard
+    window.location.href = "dashboard.html";
+
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove("hidden");
+  }
+});
+</script>
+
 </body>
 </html>
