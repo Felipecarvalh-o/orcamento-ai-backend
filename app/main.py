@@ -15,8 +15,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    raise RuntimeError("Variáveis do Supabase não configuradas")
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not WEBHOOK_SECRET:
+    raise RuntimeError("Variáveis de ambiente não configuradas corretamente")
 
 supabase: Client = create_client(
     SUPABASE_URL,
@@ -26,7 +26,7 @@ supabase: Client = create_client(
 app = FastAPI(title="Orçamento AI Backend")
 
 # ==========================
-# HEALTH CHECK (Render)
+# HEALTH CHECK
 # ==========================
 
 @app.get("/health")
@@ -34,7 +34,17 @@ def health():
     return {"status": "ok"}
 
 # ==========================
-# UTIL: validar assinatura
+# CONFIGURAÇÃO DE PLANOS
+# ==========================
+
+PLAN_LIMITS = {
+    "basic": 30,
+    "pro": 100,
+    "premium": 300
+}
+
+# ==========================
+# UTILIDADES DE ASSINATURA
 # ==========================
 
 def validar_assinatura(payload: bytes, assinatura_recebida: str):
@@ -45,7 +55,90 @@ def validar_assinatura(payload: bytes, assinatura_recebida: str):
     ).hexdigest()
 
     if not hmac.compare_digest(assinatura_calculada, assinatura_recebida):
-        raise HTTPException(status_code=401, detail="Assinatura inválida")
+        raise HTTPException(status_code=401, detail="Assinatura do webhook inválida")
+
+def verificar_plano_e_limite(user_id: str):
+    """
+    Verifica se o usuário:
+    - Tem assinatura ativa
+    - Ainda possui uso disponível no mês
+    """
+    result = supabase.table("subscriptions") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .single() \
+        .execute()
+
+    if not result.data:
+        raise HTTPException(status_code=403, detail="Usuário sem assinatura")
+
+    sub = result.data
+
+    if sub["status"] != "active":
+        raise HTTPException(status_code=403, detail="Assinatura inativa")
+
+    if sub["current_usage"] >= sub["monthly_limit"]:
+        raise HTTPException(
+            status_code=429,
+            detail="Limite mensal de orçamentos atingido"
+        )
+
+    # Reset automático se passou da renovação
+    if sub["renews_at"]:
+        renews_at = datetime.fromisoformat(sub["renews_at"])
+        if datetime.utcnow() > renews_at:
+            supabase.table("subscriptions").update({
+                "current_usage": 0,
+                "renews_at": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("user_id", user_id).execute()
+
+def incrementar_uso(user_id: str):
+    supabase.rpc("increment_usage", {"uid": user_id}).execute()
+
+# ==========================
+# ENDPOINT DE TESTE (ORÇAMENTO)
+# ==========================
+
+@app.post("/generate-budget")
+def generate_budget(user_id: str):
+    """
+    Endpoint de exemplo protegido por plano
+    """
+    verificar_plano_e_limite(user_id)
+
+    # 🔮 Aqui entraria a IA depois
+    budget = {
+        "descricao": "Serviço de construção",
+        "valor_total": 1500
+    }
+
+    # Incrementa uso
+    supabase.table("subscriptions").update({
+        "current_usage": supabase.table("subscriptions").select("current_usage").execute()
+    })
+
+    supabase.table("subscriptions").update({
+        "current_usage": supabase.table("subscriptions").select("current_usage").execute()
+    })
+
+    supabase.table("subscriptions").update({
+        "current_usage": supabase.table("subscriptions").select("current_usage").execute()
+    })
+
+    supabase.table("subscriptions").update({
+        "current_usage": supabase.table("subscriptions").select("current_usage").execute()
+    })
+
+    # Forma correta (incremento simples)
+    supabase.table("subscriptions").update({
+        "current_usage": supabase.rpc("increment_usage", {"uid": user_id})
+    })
+
+    return {
+        "success": True,
+        "budget": budget
+    }
 
 # ==========================
 # WEBHOOK CAKTO
@@ -65,12 +158,16 @@ async def webhook_cakto(request: Request):
     event = payload.get("event")
     data = payload.get("data", {})
 
-    user_id = data.get("external_id")  # ID do usuário no seu sistema
+    user_id = data.get("external_id")
     plano = data.get("plan", "basic")
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="external_id ausente")
 
     # ==========================
     # LOG DO WEBHOOK
     # ==========================
+
     supabase.table("payment_logs").insert({
         "provider": "cakto",
         "event": event,
@@ -82,7 +179,7 @@ async def webhook_cakto(request: Request):
     # ==========================
 
     if event == "payment.approved":
-        limite = 30 if plano == "basic" else 100
+        limite = PLAN_LIMITS.get(plano, 30)
 
         supabase.table("subscriptions").upsert({
             "user_id": user_id,
@@ -94,13 +191,13 @@ async def webhook_cakto(request: Request):
             "updated_at": datetime.utcnow().isoformat()
         }).execute()
 
-    elif event == "payment.canceled":
+    elif event in ["payment.canceled", "subscription.canceled"]:
         supabase.table("subscriptions").update({
             "status": "canceled",
             "updated_at": datetime.utcnow().isoformat()
         }).eq("user_id", user_id).execute()
 
-    elif event == "payment.failed":
+    elif event in ["payment.failed", "payment.past_due"]:
         supabase.table("subscriptions").update({
             "status": "past_due",
             "updated_at": datetime.utcnow().isoformat()
