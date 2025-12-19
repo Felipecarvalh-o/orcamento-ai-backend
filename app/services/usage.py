@@ -1,66 +1,89 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import HTTPException
 from supabase import create_client
 import os
 
-# Conexão com Supabase
+# ==========================
+# CONEXÃO SUPABASE
+# ==========================
+
 supabase = create_client(
     os.environ["SUPABASE_URL"],
     os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 )
 
-# Limites por plano
-PLAN_LIMITS = {
-    "basic": 20,
-    "pro": 100,
-    "premium": 999999  # ilimitado
-}
+# ==========================
+# VERIFICA PLANO E LIMITE
+# ==========================
 
 def check_user_quota(user_id: str):
     """
-    Verifica se o usuário tem assinatura ativa
-    e se ainda pode gerar orçamentos no mês
+    - Verifica assinatura ativa
+    - Verifica limite mensal
+    - Reseta contador se passou da renovação
     """
 
     res = supabase.table("subscriptions") \
         .select("*") \
         .eq("user_id", user_id) \
-        .eq("status", "active") \
         .single() \
         .execute()
 
     if not res.data:
         raise HTTPException(
             status_code=403,
-            detail="Você não possui uma assinatura ativa."
+            detail="Usuário sem assinatura."
         )
 
     sub = res.data
-    limit = PLAN_LIMITS.get(sub["plan"], 0)
 
-    if sub["current_usage"] >= limit:
+    if sub["status"] != "active":
         raise HTTPException(
             status_code=403,
+            detail="Assinatura inativa."
+        )
+
+    # 🔁 Reset automático na renovação
+    if sub["renews_at"]:
+        renews_at = datetime.fromisoformat(sub["renews_at"])
+        if datetime.utcnow() > renews_at:
+            supabase.table("subscriptions").update({
+                "current_usage": 0,
+                "renews_at": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", sub["id"]).execute()
+
+            sub["current_usage"] = 0
+
+    # 🚫 Limite atingido
+    if sub["current_usage"] >= sub["monthly_limit"]:
+        raise HTTPException(
+            status_code=429,
             detail="Limite mensal de orçamentos atingido."
         )
 
-    # Reset automático se passou da data de renovação
-    if sub["renews_at"] and datetime.utcnow() > datetime.fromisoformat(sub["renews_at"]):
-        supabase.table("subscriptions") \
-            .update({
-                "current_usage": 0,
-                "renews_at": datetime.utcnow()
-            }) \
-            .eq("id", sub["id"]) \
-            .execute()
+# ==========================
+# INCREMENTA USO
+# ==========================
 
 def increment_usage(user_id: str):
     """
-    Incrementa uso após gerar orçamento
+    Incrementa o contador de uso em +1
     """
-    supabase.table("subscriptions") \
-        .update({
-            "current_usage": supabase.rpc("increment", {})
-        }) \
+
+    # Busca uso atual
+    res = supabase.table("subscriptions") \
+        .select("current_usage") \
         .eq("user_id", user_id) \
+        .single() \
         .execute()
+
+    if not res.data:
+        return
+
+    novo_valor = res.data["current_usage"] + 1
+
+    supabase.table("subscriptions").update({
+        "current_usage": novo_valor,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("user_id", user_id).execute()
