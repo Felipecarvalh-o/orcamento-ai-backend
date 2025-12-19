@@ -34,7 +34,7 @@ def health():
     return {"status": "ok"}
 
 # ==========================
-# CONFIGURAÇÃO DE PLANOS
+# PLANOS
 # ==========================
 
 PLAN_LIMITS = {
@@ -44,7 +44,7 @@ PLAN_LIMITS = {
 }
 
 # ==========================
-# UTILIDADES DE ASSINATURA
+# UTILIDADES
 # ==========================
 
 def validar_assinatura(payload: bytes, assinatura_recebida: str):
@@ -59,21 +59,21 @@ def validar_assinatura(payload: bytes, assinatura_recebida: str):
 
 
 def verificar_plano_e_limite(user_id: str):
-    result = supabase.table("subscriptions") \
+    res = supabase.table("subscriptions") \
         .select("*") \
         .eq("user_id", user_id) \
         .single() \
         .execute()
 
-    if not result.data:
+    if not res.data:
         raise HTTPException(status_code=403, detail="Usuário sem assinatura")
 
-    sub = result.data
+    sub = res.data
 
     if sub["status"] != "active":
         raise HTTPException(status_code=403, detail="Assinatura inativa")
 
-    # Reset automático se passou da renovação
+    # Reset automático
     if sub["renews_at"]:
         renews_at = datetime.fromisoformat(sub["renews_at"])
         if datetime.utcnow() > renews_at:
@@ -93,22 +93,30 @@ def verificar_plano_e_limite(user_id: str):
 
 
 def incrementar_uso(user_id: str):
-    supabase.table("subscriptions").update({
-        "current_usage": supabase.table("subscriptions")
-        .select("current_usage")
-    }).eq("user_id", user_id)
+    """
+    Incrementa +1 no uso mensal
+    """
+    res = supabase.table("subscriptions") \
+        .select("current_usage") \
+        .eq("user_id", user_id) \
+        .single() \
+        .execute()
 
-    supabase.rpc("increment_usage", {"uid": user_id}).execute()
+    atual = res.data["current_usage"]
+
+    supabase.table("subscriptions").update({
+        "current_usage": atual + 1,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("user_id", user_id).execute()
 
 # ==========================
-# ENDPOINT DE ORÇAMENTO (TESTE)
+# ENDPOINT TESTE ORÇAMENTO
 # ==========================
 
 @app.post("/generate-budget")
 def generate_budget(user_id: str):
     verificar_plano_e_limite(user_id)
 
-    # (IA entra aqui depois)
     budget = {
         "descricao": "Serviço de construção",
         "valor_total": 1500
@@ -145,7 +153,6 @@ async def webhook_cakto(request: Request):
     if not user_id:
         raise HTTPException(status_code=400, detail="external_id ausente")
 
-    # Log do webhook
     supabase.table("payment_logs").insert({
         "provider": "cakto",
         "event": event,
@@ -178,4 +185,3 @@ async def webhook_cakto(request: Request):
         }).eq("user_id", user_id).execute()
 
     return JSONResponse(content={"received": True})
-
