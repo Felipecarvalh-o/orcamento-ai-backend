@@ -1,1 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Resultado</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="p-4">
+
+<script>
+requireAuth()
+const o = JSON.parse(localStorage.getItem("orcamento"))
+</script>
+
+<h1 class="text-xl font-bold mb-4">Orçamento</h1>
+
+<div class="bg-gray-100 p-4 rounded space-y-2">
+  <p><b>Descrição:</b> <span id="desc"></span></p>
+  <p><b>Tempo:</b> <span id="tempo"></span></p>
+  <p class="text-green-700 font-bold">R$ <span id="valor"></span></p>
+</div>
+
+<script>
+document.getElementById("desc").innerText = o.descricao
+document.getElementById("tempo").innerText = o.tempo_estimado
+document.getElementById("valor").innerText = o.valor_sugerido
+</script>
+
+</body>
+</html>
 
