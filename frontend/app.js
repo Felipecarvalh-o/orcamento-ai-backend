@@ -3,7 +3,7 @@ async function gerar() {
   const tipo = document.getElementById("tipo").value;
   const margem = Number(document.getElementById("margem").value);
 
-  const res = await fetch("https://SEU_BACKEND.onrender.com/orcamento/gerar", {
+  const res = await fetch("https://orcamento-ai-backend.onrender.com/health", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
