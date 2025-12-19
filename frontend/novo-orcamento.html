@@ -1,1 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Novo Orçamento</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="p-4">
+
+<script>requireAuth()</script>
+
+<h1 class="text-lg font-bold mb-4">Novo Orçamento</h1>
+
+<select id="tipo" class="w-full p-3 border rounded mb-3">
+  <option value="pedreiro">Pedreiro</option>
+  <option value="eletricista">Eletricista</option>
+  <option value="encanador">Encanador</option>
+</select>
+
+<input id="margem" type="number" placeholder="Margem (%)"
+  class="w-full p-3 border rounded mb-3"/>
+
+<button onclick="gerar()" class="w-full bg-blue-600 text-white p-3 rounded">
+  Gerar Orçamento
+</button>
+
+<script>
+async function gerar() {
+  const res = await fetch(API_URL + "/orcamento/gerar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: getUserId(),
+      tipo_servico: document.getElementById("tipo").value,
+      margem_percentual: Number(document.getElementById("margem").value)
+    })
+  });
+
+  const data = await res.json();
+  localStorage.setItem("orcamento", JSON.stringify(data.orcamento));
+  window.location.href = "resultado.html";
+}
+</script>
+
+</body>
+</html>
 
