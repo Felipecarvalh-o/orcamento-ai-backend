@@ -1,28 +1,20 @@
-const API = "https://SEU_BACKEND.onrender.com";
-
-function login() {
-  localStorage.setItem("user_id", "teste-user");
-  window.location.href = "dashboard.html";
-}
-
-function gerarOrcamento() {
+async function gerar() {
+  const userId = document.getElementById("userId").value;
   const tipo = document.getElementById("tipo").value;
-  const margem = document.getElementById("margem").value;
-  const user_id = localStorage.getItem("user_id");
+  const margem = Number(document.getElementById("margem").value);
 
-  fetch(`${API}/orcamento/gerar`, {
+  const res = await fetch("https://SEU_BACKEND.onrender.com/orcamento/gerar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      user_id,
+      user_id: userId,
       tipo_servico: tipo,
-      margem_percentual: Number(margem)
+      margem_percentual: margem
     })
-  })
-  .then(res => res.json())
-  .then(data => {
-    localStorage.setItem("resultado",
-      JSON.stringify(data.orcamento, null, 2));
-    window.location.href = "resultado.html";
   });
+
+  const data = await res.json();
+  const pre = document.getElementById("resultado");
+  pre.classList.remove("hidden");
+  pre.textContent = JSON.stringify(data, null, 2);
 }
